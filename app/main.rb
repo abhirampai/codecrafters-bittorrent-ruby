@@ -8,17 +8,38 @@ if ARGV.length < 2
 end
 
 def decode_bencode(bencoded_value)
-  if bencoded_value[0].chr.match?(/\d/)
-    first_colon = bencoded_value.index(':')
-    raise ArgumentError, 'Invalid encoded value' if first_colon.nil?
+  result = []
+  current_index = 0
+  length = bencoded_value.length
 
-    bencoded_value[first_colon + 1..]
-  elsif bencoded_value.match?(/^i-?\d*e/)
-    bencoded_value.gsub(/[ie]/, '').to_i
-  else
-    puts 'Only strings are supported at the moment'
-    exit(1)
+  while current_index < length
+    case bencoded_value[current_index]
+    when 'l'
+      current_index += 1
+      decoded_array, end_index = decode_bencode(bencoded_value[current_index..])
+      current_index += end_index + 1
+      result << decoded_array
+    when 'i'
+      current_index += 1
+      index_of_e = bencoded_value.index('e', current_index)
+      decoded_integer_value = bencoded_value[current_index..index_of_e].to_i
+      current_index = index_of_e + 1
+      result << decoded_integer_value
+    when 'e'
+      return result, current_index
+    when /\d/
+      colon_index = bencoded_value.index(':', current_index)
+      string_length = bencoded_value[current_index...colon_index].to_i
+      current_index = colon_index + 1
+      string_value = bencoded_value[current_index...(current_index + string_length)]
+      current_index += string_length
+      result << string_value
+    else
+      puts 'Only strings are supported at the moment'
+      exit(1)
+    end
   end
+  result.size == 1 ? result[0] : result.flatten(1)
 end
 
 command = ARGV[0]
