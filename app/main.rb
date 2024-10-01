@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'json'
+require 'digest'
 
 if ARGV.length < 2
   puts 'Usage: your_bittorrent.sh <command> <args>'
@@ -57,6 +58,21 @@ def decode_bencode(bencoded_value)
   result.size == 1 ? result[0] : result.flatten(1)
 end
 
+def encode_bencode(data)
+  case data
+  when String
+    "#{data.length}:#{data}"
+  when Integer
+    "i#{data}e"
+  when Array
+    "l#{data.map { |item| encode_bencode(item) }.join}e"
+  when Hash
+    "d#{data.sort.map { |key, value| "#{encode_bencode(key)}#{encode_bencode(value)}" }.join}e"
+  else
+    raise "Unsupported data type: #{data.class}"
+  end
+end
+
 command = ARGV[0]
 
 if command == 'decode'
@@ -68,6 +84,10 @@ end
 if command == 'info'
   file = File.open(ARGV[1], 'rb')
   decoded_str = decode_bencode(file.read)
+  bencoded_data = encode_bencode(decoded_str['info'])
+  sha1_hash = Digest::SHA1.hexdigest(bencoded_data)
+
   puts "Tracker URL: #{decoded_str['announce']}"
   puts "Length: #{decoded_str['info']['length']}"
+  puts "Info Hash: #{sha1_hash}"
 end
