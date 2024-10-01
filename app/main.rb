@@ -14,6 +14,11 @@ def decode_bencode(bencoded_value)
 
   while current_index < length
     case bencoded_value[current_index]
+    when 'd'
+      current_index += 1
+      decoded_value, end_index = decode_bencode(bencoded_value[current_index..])
+      current_index += end_index + 1
+      result << Hash[decoded_value.each_slice(2).to_a]
     when 'l'
       current_index += 1
       decoded_array, end_index = decode_bencode(bencoded_value[current_index..])
