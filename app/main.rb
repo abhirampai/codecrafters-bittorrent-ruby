@@ -7,6 +7,22 @@ if ARGV.length < 2
   exit(1)
 end
 
+def decode_integer(input, current_index)
+  end_index = input.index('e', current_index)
+  decoded_integer_value = input[current_index..end_index].to_i
+
+  [decoded_integer_value, end_index + 1]
+end
+
+def decode_string(input, current_index)
+  colon_index = input.index(':', current_index)
+  string_length = input[current_index...colon_index].to_i
+  current_index = colon_index + 1
+  string_value = input[current_index...(current_index + string_length)]
+  current_index += string_length
+  [string_value, current_index]
+end
+
 def decode_bencode(bencoded_value)
   result = []
   current_index = 0
@@ -26,18 +42,12 @@ def decode_bencode(bencoded_value)
       result << decoded_array
     when 'i'
       current_index += 1
-      index_of_e = bencoded_value.index('e', current_index)
-      decoded_integer_value = bencoded_value[current_index..index_of_e].to_i
-      current_index = index_of_e + 1
+      decoded_integer_value, current_index = decode_integer(bencoded_value, current_index)
       result << decoded_integer_value
     when 'e'
       return result, current_index
     when /\d/
-      colon_index = bencoded_value.index(':', current_index)
-      string_length = bencoded_value[current_index...colon_index].to_i
-      current_index = colon_index + 1
-      string_value = bencoded_value[current_index...(current_index + string_length)]
-      current_index += string_length
+      string_value, current_index = decode_string(bencoded_value, current_index)
       result << string_value
     else
       puts 'Only strings are supported at the moment'
@@ -53,4 +63,11 @@ if command == 'decode'
   encoded_str = ARGV[1]
   decoded_str = decode_bencode(encoded_str)
   puts JSON.generate(decoded_str)
+end
+
+if command == 'info'
+  file = File.open(ARGV[1], 'rb')
+  decoded_str = decode_bencode(file.read)
+  puts "Tracker URL: #{decoded_str['announce']}"
+  puts "Length: #{decoded_str['info']['length']}"
 end
