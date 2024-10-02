@@ -2,6 +2,9 @@
 
 require 'json'
 require 'digest'
+require 'uri'
+require 'net/http'
+require 'securerandom'
 
 if ARGV.length < 2
   puts 'Usage: your_bittorrent.sh <command> <args>'
@@ -73,6 +76,19 @@ def encode_bencode(data)
   end
 end
 
+def decode_peers(peers)
+  peers_count = peers.length / 6
+
+  peers_count.times do |x|
+    peer = peers[x * 6, 6] 
+    ip_address_bytes = peer[0..3].unpack('C4')
+    ip_address = ip_address_bytes.join('.')
+    ip_port = peer[4..5].unpack1('n')
+
+    puts "#{ip_address}:#{ip_port}"
+  end
+end
+
 command = ARGV[0]
 
 if command == 'decode'
@@ -92,4 +108,27 @@ if command == 'info'
   puts "Info Hash: #{sha1_hash}"
   puts "Piece Length: #{decoded_str['info']['piece length']}"
   puts "Piece Hashes: #{decoded_str['info']['pieces'].unpack1('H*')}"
+end
+
+if command == 'peers'
+  file = File.open(ARGV[1], 'rb')
+  decoded_str = decode_bencode(file.read)
+  bencoded_data = encode_bencode(decoded_str['info'])
+  sha1_hash = Digest::SHA1.digest(bencoded_data)
+
+  uri = URI(decoded_str['announce'])
+  params = {
+    info_hash: sha1_hash,
+    peer_id: SecureRandom.alphanumeric(20),
+    port: 6881,
+    uploaded: 0,
+    downloaded: 0,
+    left: decoded_str['info']['length'],
+    compact: 1
+  }
+  uri.query = URI.encode_www_form(params)
+
+  res = Net::HTTP.get(uri)
+  decoded_str = decode_bencode(res)
+  decode_peers(decoded_str['peers'])
 end
