@@ -5,6 +5,7 @@ require 'digest'
 require 'uri'
 require 'net/http'
 require 'securerandom'
+require 'socket' 
 
 if ARGV.length < 2
   puts 'Usage: your_bittorrent.sh <command> <args>'
@@ -131,4 +132,33 @@ if command == 'peers'
   res = Net::HTTP.get(uri)
   decoded_str = decode_bencode(res)
   decode_peers(decoded_str['peers'])
+end
+
+if command == 'handshake'
+  file = File.open(ARGV[1], 'rb')
+  decoded_str = decode_bencode(file.read)
+  bencoded_data = encode_bencode(decoded_str['info'])
+  sha1_hash = Digest::SHA1.digest(bencoded_data)
+  handshake_options = ARGV[2].split(':')
+  peer_ip = handshake_options[0]
+  peer_port = handshake_options[1]
+
+  length = [19].pack('C')
+  protocol = 'BitTorrent protocol'
+  reserved_bytes = "\x00" * 8
+  peer_id = SecureRandom.alphanumeric(20)
+
+  payload = length + protocol + reserved_bytes + sha1_hash + peer_id
+
+  begin
+    tcp_socket = TCPSocket.open(peer_ip, peer_port)
+    tcp_socket.write(payload)
+    response = tcp_socket.read(payload.size)
+
+    _, _, _, _, peer_id = response.unpack('C A19 A8 A20 H*')
+    puts "Peer ID: #{peer_id}"
+    tcp_socket.close
+  rescue StandardError => e
+    puts "An error occurred: #{e.message}"
+  end
 end
