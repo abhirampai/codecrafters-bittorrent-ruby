@@ -177,6 +177,16 @@ class BitTorrentClient
     extension_handshake_message = Bencoding.encode({ 'm' => { 'ut_metadata' => 16 } })
     length = [2 + extension_handshake_message.bytesize].pack('N')
     socket.write(length + [20].pack('C') + [0].pack('C') + extension_handshake_message)
+
+    loop do
+      message = TCPConnection.read_message(socket)
+      next unless message[:id] == 20
+
+      payload = message[:payload][1..]
+      decoded_payload = Bencoding.decode(payload)
+      puts "Peer Metadata Extension ID: #{decoded_payload['m']['ut_metadata']}"
+      break
+    end
   end
 
   private
