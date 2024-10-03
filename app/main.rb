@@ -35,6 +35,8 @@ when 'magnet_parse'
   BitTorrentClient.parse_magnet_link(args[0])
 when 'magnet_handshake'
   BitTorrentClient.magnet_handshake(args[0])
+when 'magnet_info'
+  BitTorrentClient.magnet_info(args[0])
 else
   puts 'Invalid command'
 end

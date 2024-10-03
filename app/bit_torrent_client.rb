@@ -147,10 +147,30 @@ class BitTorrentClient
   end
 
   def self.magnet_handshake(magnet_link)
-    peer_id, decoded_payload = MagnetExtension.handshake(magnet_link)
+    _, peer_id, decoded_payload, socket = MagnetExtension.handshake(magnet_link)
 
     puts "Peer ID: #{peer_id}"
     puts "Peer Metadata Extension ID: #{decoded_payload['m']['ut_metadata']}"
+    socket.close
+  end
+
+  def self.magnet_info(magnet_link)
+    decoded_magnet_extension_hash, _, decoded_payload, socket = MagnetExtension.handshake(magnet_link)
+    request_payload = Bencoding.encode({ 'msg_type' => 0, 'piece' => 0 })
+    length = [2 + request_payload.bytesize].pack('N')
+    socket.write(length + [20].pack('C') + [decoded_payload['m']['ut_metadata']].pack('C') + request_payload)
+
+    message = TCPConnection.read_until(socket, 20)
+
+    payload = Bencoding.decode(message[:payload][1..])
+    decoded_info = payload[1]
+
+    puts "Tracker URL: #{CGI.unescape(decoded_magnet_extension_hash['tr'])}"
+    puts "Length: #{decoded_info['length']}"
+    puts "Info Hash: #{decoded_magnet_extension_hash['xt'].gsub('urn:btih:', '')}"
+    puts "Piece Length: #{decoded_info['piece length']}"
+    puts "Piece Hashes: #{decoded_info['pieces'].unpack1('H*')}"
+
   end
 
   private

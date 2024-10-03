@@ -58,7 +58,7 @@ class MagnetExtension
     payload = message[:payload][1..]
     decoded_payload = Bencoding.decode(payload)
 
-    [peer_id, decoded_payload]
+    [decoded_magnet_extension_hash, peer_id, decoded_payload, socket]
   end
 
   private
