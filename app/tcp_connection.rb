@@ -34,6 +34,23 @@ class TCPConnection
     handle_peer_message(peer_ip, peer_port, sha1_hash, info, piece_index, output_file_path)
   end
 
+  def self.handle_download(peer_ip, peer_port, sha1_hash, info, piece_index)
+    peer_id = SecureRandom.alphanumeric(20)
+    tcp_socket = initiate_connection(peer_ip, peer_port, sha1_hash, peer_id)
+
+    validate_handshake(tcp_socket, sha1_hash)
+
+    read_until(tcp_socket, 5)
+    send_message(tcp_socket, 2)
+    read_until(tcp_socket, 1)
+
+    piece_data = download_piece_data(tcp_socket, info, piece_index)
+    validate_piece(piece_data, info, piece_index)
+    p "Piece #{piece_index} downloaded."
+    tcp_socket.close
+    piece_data
+  end
+
   private
 
   def self.initiate_connection(peer_ip, peer_port, sha1_hash, peer_id)

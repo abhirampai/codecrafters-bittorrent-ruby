@@ -4,6 +4,7 @@ require 'json'
 require 'digest'
 require 'uri'
 require 'net/http'
+require 'async'
 
 require_relative 'bencoding'
 require_relative 'tcp_connection'
@@ -85,6 +86,48 @@ class BitTorrentClient
     peer_ip, peer_port = decode_peers(peers).last.split(':')
 
     TCPConnection.handle_peer_message(peer_ip, peer_port, sha1_hash, decoded_info, piece_index.to_i, output_file_path)
+  rescue StandardError => e
+    puts "Error downloading piece: #{e.message}"
+  end
+
+  def self.download(output_file_path, file_path)
+    decoded_file = decode_file(file_path)
+    decoded_info = decoded_file['info']
+    bencoded_data = Bencoding.encode(decoded_info)
+    sha1_hash = Digest::SHA1.digest(bencoded_data)
+
+    uri = URI(decoded_file['announce'])
+    uri.query = URI.encode_www_form(
+      info_hash: sha1_hash,
+      peer_id: SecureRandom.alphanumeric(20),
+      port: 6881,
+      uploaded: 0,
+      downloaded: 0,
+      left: decoded_info['length'],
+      compact: 1
+    )
+
+    total_pieces = decoded_info['length'].to_i / decoded_info['piece length'].to_i
+
+    response = Net::HTTP.get(uri)
+    peers = Bencoding.decode(response)['peers']
+
+    work_queue = (0..total_pieces).to_a
+    available_peers = []
+    combined_piece_data = ''
+    loop do
+      available_peers = decode_peers(peers) if available_peers.empty?
+      peer = available_peers.slice!(0)
+      peer_ip, peer_port = peer.split(':')
+      piece_index = work_queue.slice!(0)
+      combined_piece_data += TCPConnection.handle_download(peer_ip, peer_port, sha1_hash, decoded_info, piece_index.to_i)
+
+      break if work_queue.empty?
+    rescue StandardError => _e
+      work_queue.unshift(piece_index)
+    end
+
+    File.open(output_file_path, 'wb') { |f| f.write(combined_piece_data) }
   rescue StandardError => e
     puts "Error downloading piece: #{e.message}"
   end
