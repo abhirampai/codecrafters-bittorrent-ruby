@@ -147,46 +147,10 @@ class BitTorrentClient
   end
 
   def self.magnet_handshake(magnet_link)
-    decoded_magnet_extension_hash = MagnetExtension.decode(magnet_link)
-    info_hash = [decoded_magnet_extension_hash['xt'].gsub('urn:btih:', '')].pack('H*')
+    peer_id, decoded_payload = MagnetExtension.handshake(magnet_link)
 
-    uri = URI(CGI.unescape(decoded_magnet_extension_hash['tr']))
-    uri.query = URI.encode_www_form(
-      info_hash:,
-      peer_id: SecureRandom.alphanumeric(20),
-      port: 6881,
-      uploaded: 0,
-      downloaded: 0,
-      left: 999,
-      compact: 1
-    )
-
-    response = Net::HTTP.get(uri)
-    peers = Bencoding.decode(response)['peers']
-    peer_ip, peer_port = decode_peers(peers).first.split(':')
-
-    socket = TCPConnection.handshake(peer_ip, peer_port, info_hash, extension: true)
-
-    socket_response = socket.read(68)
-    _, _, reserved_bytes, _, peer_id = socket_response.unpack('C A19 A8 A20 H*')
     puts "Peer ID: #{peer_id}"
-
-    return unless reserved_bytes.unpack1('H*').to_i(16).positive?
-
-    TCPConnection.read_until(socket, 5)
-    extension_handshake_message = Bencoding.encode({ 'm' => { 'ut_metadata' => 16 } })
-    length = [2 + extension_handshake_message.bytesize].pack('N')
-    socket.write(length + [20].pack('C') + [0].pack('C') + extension_handshake_message)
-
-    loop do
-      message = TCPConnection.read_message(socket)
-      next unless message[:id] == 20
-
-      payload = message[:payload][1..]
-      decoded_payload = Bencoding.decode(payload)
-      puts "Peer Metadata Extension ID: #{decoded_payload['m']['ut_metadata']}"
-      break
-    end
+    puts "Peer Metadata Extension ID: #{decoded_payload['m']['ut_metadata']}"
   end
 
   private

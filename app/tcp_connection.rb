@@ -70,7 +70,7 @@ class TCPConnection
   def self.read_until(socket, id)
     loop do
       message = read_message(socket)
-      return if message[:id] == id
+      return message if message[:id] == id
     end
   end
 
