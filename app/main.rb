@@ -31,6 +31,8 @@ when 'download'
     exit(1)
   end
   BitTorrentClient.download(args[1], args[2])
+when 'magnet_parse'
+  BitTorrentClient.parse_magnet_link(args[0])
 else
   puts 'Invalid command'
 end

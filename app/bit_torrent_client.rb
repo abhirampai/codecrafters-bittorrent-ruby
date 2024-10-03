@@ -5,9 +5,11 @@ require 'digest'
 require 'uri'
 require 'net/http'
 require 'async'
+require 'cgi'
 
 require_relative 'bencoding'
 require_relative 'tcp_connection'
+require_relative 'magnet_extension'
 
 # Handles cli related methods
 class BitTorrentClient
@@ -130,6 +132,13 @@ class BitTorrentClient
     File.open(output_file_path, 'wb') { |f| f.write(combined_piece_data) }
   rescue StandardError => e
     puts "Error downloading piece: #{e.message}"
+  end
+
+  def self.parse_magnet_link(magnet_link)
+    decoded_magnet_extension_hash = MagnetExtension.decode(magnet_link)
+    
+    puts "Tracker URL: #{CGI.unescape(decoded_magnet_extension_hash['tr'])}"
+    puts "Info Hash: #{decoded_magnet_extension_hash['xt'].gsub('urn:btih:', '')}"
   end
 
   private
