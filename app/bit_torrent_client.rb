@@ -82,7 +82,7 @@ class BitTorrentClient
 
     response = Net::HTTP.get(uri)
     peers = Bencoding.decode(response)['peers']
-    peer_ip, peer_port = decode_peers(peers).first.split(':')
+    peer_ip, peer_port = decode_peers(peers).last.split(':')
 
     TCPConnection.handle_peer_message(peer_ip, peer_port, sha1_hash, decoded_info, piece_index.to_i, output_file_path)
   rescue StandardError => e

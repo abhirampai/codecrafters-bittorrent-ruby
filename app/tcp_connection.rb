@@ -73,9 +73,11 @@ class TCPConnection
     current_piece_length = piece_index < num_pieces - 1 ? piece_length : total_length - (num_pieces - 1) * piece_length
 
     blocks = []
-    (0...current_piece_length).step(16 * 1024) do |offset|
+    offset = 0
+    while offset < current_piece_length
       length = [16 * 1024, current_piece_length - offset].min
-      blocks << { index: piece_index, begin: offset, length: length }
+      blocks << { index: piece_index, begin: offset, length: }
+      offset += length
     end
 
     blocks.each do |block|
@@ -83,7 +85,6 @@ class TCPConnection
       send_message(socket, 6, payload)
     end
 
-    piece_data = ''
     piece_buffers = {}
     received_bytes = 0
 
@@ -101,7 +102,8 @@ class TCPConnection
       received_bytes += block_data.length
     end
 
-    piece_buffers.keys.sort.each { |offset| piece_data += piece_buffers[offset] }
+    piece_data = ''
+    piece_buffers.keys.sort.each { |begin_offset| piece_data += piece_buffers[begin_offset] }
     piece_data
   end
 
