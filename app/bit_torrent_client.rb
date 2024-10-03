@@ -21,6 +21,7 @@ class BitTorrentClient
   def self.info(file_path)
     decoded_file = decode_file(file_path)
     decoded_info = decoded_file['info']
+    p decoded_info
     bencoded_data = Bencoding.encode(decoded_info)
     sha1_hash = Digest::SHA1.hexdigest(bencoded_data)
 
@@ -167,8 +168,15 @@ class BitTorrentClient
     socket = TCPConnection.handshake(peer_ip, peer_port, info_hash, extension: true)
 
     socket_response = socket.read(68)
-    _, _, _, _, peer_id = socket_response.unpack('C A19 A8 A20 H*')
+    _, _, reserved_bytes, _, peer_id = socket_response.unpack('C A19 A8 A20 H*')
     puts "Peer ID: #{peer_id}"
+
+    return unless reserved_bytes.unpack1('H*').to_i(16).positive?
+
+    TCPConnection.read_until(socket, 5)
+    extension_handshake_message = Bencoding.encode({ 'm' => { 'ut_metadata' => 16 } })
+    length = [2 + extension_handshake_message.bytesize].pack('N')
+    socket.write(length + [20].pack('C') + [0].pack('C') + extension_handshake_message)
   end
 
   private
