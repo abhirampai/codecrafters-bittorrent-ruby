@@ -10,6 +10,7 @@ class TCPConnection
   end
 
   def self.handle_peer_message(peer_ip, peer_port, sha1_hash, info, piece_index, output_file_path)
+    retry_count = 0
     peer_id = SecureRandom.alphanumeric(20)
     tcp_socket = initiate_connection(peer_ip, peer_port, sha1_hash, peer_id)
 
@@ -27,6 +28,10 @@ class TCPConnection
     tcp_socket.close
   rescue StandardError => e
     puts "Error: #{e.message}"
+    return if retry_count > 2
+
+    retry_count += 1
+    handle_peer_message(peer_ip, peer_port, sha1_hash, info, piece_index, output_file_path)
   end
 
   private
