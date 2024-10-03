@@ -5,8 +5,8 @@ require 'socket'
 
 # Handles tcp socket related methods
 class TCPConnection
-  def self.handshake(peer_ip, peer_port, sha1_hash)
-    initiate_connection(peer_ip, peer_port, sha1_hash, SecureRandom.alphanumeric(20))
+  def self.handshake(peer_ip, peer_port, sha1_hash, extension: false)
+    initiate_connection(peer_ip, peer_port, sha1_hash, SecureRandom.alphanumeric(20), extension:)
   end
 
   def self.handle_peer_message(peer_ip, peer_port, sha1_hash, info, piece_index, output_file_path)
@@ -53,8 +53,9 @@ class TCPConnection
 
   private
 
-  def self.initiate_connection(peer_ip, peer_port, sha1_hash, peer_id)
-    payload = "#{[19].pack('C')}BitTorrent protocol#{"\x00" * 8}#{sha1_hash}#{peer_id}"
+  def self.initiate_connection(peer_ip, peer_port, sha1_hash, peer_id, extension: false)
+    reserved_bytes = extension ? "#{"\x00" * 5}\x10#{"\x00" * 2}" : "\x00" * 8
+    payload = "#{[19].pack('C')}BitTorrent protocol#{reserved_bytes}#{sha1_hash}#{peer_id}"
     socket = TCPSocket.open(peer_ip, peer_port)
     socket.write(payload)
     socket

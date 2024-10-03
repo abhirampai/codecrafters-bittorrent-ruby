@@ -37,6 +37,9 @@ class BitTorrentClient
     bencoded_data = Bencoding.encode(decoded_info)
     sha1_hash = Digest::SHA1.digest(bencoded_data)
 
+    p decoded_file['announce']
+    p sha1_hash
+
     uri = URI(decoded_file['announce'])
     uri.query = URI.encode_www_form(
       info_hash: sha1_hash,
@@ -49,6 +52,7 @@ class BitTorrentClient
     )
 
     response = Net::HTTP.get(uri)
+    p response
     peers = Bencoding.decode(response)['peers']
     puts decode_peers(peers)
   end
@@ -136,9 +140,35 @@ class BitTorrentClient
 
   def self.parse_magnet_link(magnet_link)
     decoded_magnet_extension_hash = MagnetExtension.decode(magnet_link)
-    
+
     puts "Tracker URL: #{CGI.unescape(decoded_magnet_extension_hash['tr'])}"
     puts "Info Hash: #{decoded_magnet_extension_hash['xt'].gsub('urn:btih:', '')}"
+  end
+
+  def self.magnet_handshake(magnet_link)
+    decoded_magnet_extension_hash = MagnetExtension.decode(magnet_link)
+    info_hash = [decoded_magnet_extension_hash['xt'].gsub('urn:btih:', '')].pack('H*')
+
+    uri = URI(CGI.unescape(decoded_magnet_extension_hash['tr']))
+    uri.query = URI.encode_www_form(
+      info_hash:,
+      peer_id: SecureRandom.alphanumeric(20),
+      port: 6881,
+      uploaded: 0,
+      downloaded: 0,
+      left: 999,
+      compact: 1
+    )
+
+    response = Net::HTTP.get(uri)
+    peers = Bencoding.decode(response)['peers']
+    peer_ip, peer_port = decode_peers(peers).first.split(':')
+
+    socket = TCPConnection.handshake(peer_ip, peer_port, info_hash, extension: true)
+
+    socket_response = socket.read(68)
+    _, _, _, _, peer_id = socket_response.unpack('C A19 A8 A20 H*')
+    puts "Peer ID: #{peer_id}"
   end
 
   private
