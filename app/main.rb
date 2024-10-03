@@ -5,160 +5,33 @@ require 'digest'
 require 'uri'
 require 'net/http'
 require 'securerandom'
-require 'socket' 
+require 'socket'
+
+require_relative 'bit_torrent_client'
 
 if ARGV.length < 2
   puts 'Usage: your_bittorrent.sh <command> <args>'
   exit(1)
 end
 
-def decode_integer(input, current_index)
-  end_index = input.index('e', current_index)
-  decoded_integer_value = input[current_index..end_index].to_i
-
-  [decoded_integer_value, end_index + 1]
-end
-
-def decode_string(input, current_index)
-  colon_index = input.index(':', current_index)
-  string_length = input[current_index...colon_index].to_i
-  current_index = colon_index + 1
-  string_value = input[current_index...(current_index + string_length)]
-  current_index += string_length
-  [string_value, current_index]
-end
-
-def decode_bencode(bencoded_value)
-  result = []
-  current_index = 0
-  length = bencoded_value.length
-
-  while current_index < length
-    case bencoded_value[current_index]
-    when 'd'
-      current_index += 1
-      decoded_value, end_index = decode_bencode(bencoded_value[current_index..])
-      current_index += end_index + 1
-      result << Hash[decoded_value.each_slice(2).to_a]
-    when 'l'
-      current_index += 1
-      decoded_array, end_index = decode_bencode(bencoded_value[current_index..])
-      current_index += end_index + 1
-      result << decoded_array
-    when 'i'
-      current_index += 1
-      decoded_integer_value, current_index = decode_integer(bencoded_value, current_index)
-      result << decoded_integer_value
-    when 'e'
-      return result, current_index
-    when /\d/
-      string_value, current_index = decode_string(bencoded_value, current_index)
-      result << string_value
-    else
-      puts 'Only strings are supported at the moment'
-      exit(1)
-    end
-  end
-  result.size == 1 ? result[0] : result.flatten(1)
-end
-
-def encode_bencode(data)
-  case data
-  when String
-    "#{data.length}:#{data}"
-  when Integer
-    "i#{data}e"
-  when Array
-    "l#{data.map { |item| encode_bencode(item) }.join}e"
-  when Hash
-    "d#{data.sort.map { |key, value| "#{encode_bencode(key)}#{encode_bencode(value)}" }.join}e"
-  else
-    raise "Unsupported data type: #{data.class}"
-  end
-end
-
-def decode_peers(peers)
-  peers_count = peers.length / 6
-
-  peers_count.times do |x|
-    peer = peers[x * 6, 6] 
-    ip_address_bytes = peer[0..3].unpack('C4')
-    ip_address = ip_address_bytes.join('.')
-    ip_port = peer[4..5].unpack1('n')
-
-    puts "#{ip_address}:#{ip_port}"
-  end
-end
-
 command = ARGV[0]
+args = ARGV[1..]
 
-if command == 'decode'
-  encoded_str = ARGV[1]
-  decoded_str = decode_bencode(encoded_str)
-  puts JSON.generate(decoded_str)
-end
-
-if command == 'info'
-  file = File.open(ARGV[1], 'rb')
-  decoded_str = decode_bencode(file.read)
-  bencoded_data = encode_bencode(decoded_str['info'])
-  sha1_hash = Digest::SHA1.hexdigest(bencoded_data)
-
-  puts "Tracker URL: #{decoded_str['announce']}"
-  puts "Length: #{decoded_str['info']['length']}"
-  puts "Info Hash: #{sha1_hash}"
-  puts "Piece Length: #{decoded_str['info']['piece length']}"
-  puts "Piece Hashes: #{decoded_str['info']['pieces'].unpack1('H*')}"
-end
-
-if command == 'peers'
-  file = File.open(ARGV[1], 'rb')
-  decoded_str = decode_bencode(file.read)
-  bencoded_data = encode_bencode(decoded_str['info'])
-  sha1_hash = Digest::SHA1.digest(bencoded_data)
-
-  uri = URI(decoded_str['announce'])
-  params = {
-    info_hash: sha1_hash,
-    peer_id: SecureRandom.alphanumeric(20),
-    port: 6881,
-    uploaded: 0,
-    downloaded: 0,
-    left: decoded_str['info']['length'],
-    compact: 1
-  }
-  uri.query = URI.encode_www_form(params)
-
-  res = Net::HTTP.get(uri)
-  decoded_str = decode_bencode(res)
-  decode_peers(decoded_str['peers'])
-end
-
-if command == 'handshake'
-  file = File.open(ARGV[1], 'rb')
-  decoded_str = decode_bencode(file.read)
-  bencoded_data = encode_bencode(decoded_str['info'])
-  sha1_hash = Digest::SHA1.digest(bencoded_data)
-  handshake_options = ARGV[2].split(':')
-  peer_ip = handshake_options[0]
-  peer_port = handshake_options[1]
-
-  length = [19].pack('C')
-  protocol = 'BitTorrent protocol'
-  reserved_bytes = "\x00" * 8
-  peer_id = SecureRandom.alphanumeric(20)
-
-  payload = length + protocol + reserved_bytes + sha1_hash + peer_id
-
-  begin
-    tcp_socket = TCPSocket.open(peer_ip, peer_port)
-    tcp_socket.write(payload)
-    response = tcp_socket.read(payload.size)
-
-    _, _, _, _, peer_id = response.unpack('C A19 A8 A20 H*')
-    puts "Peer ID: #{peer_id}"
-    tcp_socket.close
-  rescue StandardError => e
-    puts "An error occurred: #{e.message}"
+case command
+when 'decode'
+  BitTorrentClient.decode(args[0])
+when 'info'
+  BitTorrentClient.info(args[0])
+when 'peers'
+  BitTorrentClient.peers(args[0])
+when 'handshake'
+  BitTorrentClient.handshake(args[0], args[1])
+when 'download_piece'
+  if args.length < 4 || args[0] != '-o'
+    puts "Usage: your_bittorrent.sh download_piece -o <output_file> <torrent_file> <piece_index>"
+    exit(1)
   end
+  BitTorrentClient.download_piece(args[1], args[2], args[3])
+else
+  puts 'Invalid command'
 end
