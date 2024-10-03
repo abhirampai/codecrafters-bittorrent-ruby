@@ -1,12 +1,5 @@
 # frozen_string_literal: true
 
-require 'json'
-require 'digest'
-require 'uri'
-require 'net/http'
-require 'securerandom'
-require 'socket'
-
 require_relative 'bit_torrent_client'
 
 if ARGV.length < 2
