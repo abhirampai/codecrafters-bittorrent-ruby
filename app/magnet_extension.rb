@@ -73,7 +73,7 @@ class MagnetExtension
     socket.close
 
     [CGI.unescape(decoded_magnet_extension_hash['tr']),
-     [decoded_magnet_extension_hash['xt'].gsub('urn:btih:', '')].pack('H*'), decoded_info]
+     [decoded_magnet_extension_hash['xt'].gsub('urn:btih:', '')].pack('H*'), decoded_info, decoded_magnet_extension_hash['xt'].gsub('urn:btih:', '')]
   end
 
   private

@@ -112,17 +112,17 @@ class BitTorrentClient
     end
 
     def magnet_info(magnet_link)
-      announce_url, _, decoded_info = MagnetExtension.request_metadata(magnet_link)
+      announce_url, _, decoded_info, info_hash = MagnetExtension.request_metadata(magnet_link)
 
       puts "Tracker URL: #{announce_url}"
       puts "Length: #{decoded_info['length']}"
-      puts "Info Hash: #{decoded_magnet_extension_hash['xt'].gsub('urn:btih:', '')}"
+      puts "Info Hash: #{info_hash}"
       puts "Piece Length: #{decoded_info['piece length']}"
       puts "Piece Hashes: #{decoded_info['pieces'].unpack1('H*')}"
     end
 
     def magnet_download_piece(output_file_path, magnet_link, piece_index)
-      announce_url, sha1_hash, decoded_info = MagnetExtension.request_metadata(magnet_link, piece_index.to_i)
+      announce_url, sha1_hash, decoded_info, _ = MagnetExtension.request_metadata(magnet_link, piece_index.to_i)
 
       peers = find_peers(announce_url, sha1_hash, decoded_info)
       peer_ip, peer_port = decode_peers(peers).last.split(':')
@@ -132,7 +132,7 @@ class BitTorrentClient
     end
 
     def magnet_download(output_file_path, magnet_link)
-      announce_url, sha1_hash, decoded_info = MagnetExtension.request_metadata(magnet_link)
+      announce_url, sha1_hash, decoded_info, _ = MagnetExtension.request_metadata(magnet_link)
       peers = find_peers(announce_url, sha1_hash, decoded_info)
 
       total_pieces = decoded_info['length'].to_i / decoded_info['piece length'].to_i
