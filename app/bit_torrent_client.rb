@@ -174,7 +174,7 @@ class BitTorrentClient
 
   def self.magnet_download_piece(output_file_path, magnet_link, piece_index)
     decoded_magnet_extension_hash, _, decoded_payload, socket = MagnetExtension.handshake(magnet_link)
-    request_payload = Bencoding.encode({ 'msg_type' => 0, 'piece' => piece_index.to_i })
+    request_payload = Bencoding.encode({ 'msg_type' => 0 })
     length = [2 + request_payload.bytesize].pack('N')
     socket.write(length + [20].pack('C') + [decoded_payload['m']['ut_metadata']].pack('C') + request_payload)
 
@@ -190,6 +190,41 @@ class BitTorrentClient
 
     puts "Dowloading piece #{piece_index.to_i}."
     TCPConnection.handle_peer_message(peer_ip, peer_port, sha1_hash, decoded_info, piece_index.to_i, output_file_path)
+  end
+
+  def self.magnet_download(output_file_path, magnet_link)
+    decoded_magnet_extension_hash, _, decoded_payload, socket = MagnetExtension.handshake(magnet_link)
+    request_payload = Bencoding.encode({ 'msg_type' => 0, 'piece' => 0 })
+    length = [2 + request_payload.bytesize].pack('N')
+    socket.write(length + [20].pack('C') + [decoded_payload['m']['ut_metadata']].pack('C') + request_payload)
+
+    message = TCPConnection.read_until(socket, 20)
+    payload = Bencoding.decode(message[:payload][1..])
+    decoded_info = payload[1]
+    socket.close
+
+    announce_url = CGI.unescape(decoded_magnet_extension_hash['tr'])
+    sha1_hash = [decoded_magnet_extension_hash['xt'].gsub('urn:btih:', '')].pack('H*')
+    peers = find_peers(announce_url, sha1_hash, decoded_info)
+
+    total_pieces = decoded_info['length'].to_i / decoded_info['piece length'].to_i
+    work_queue = (0..total_pieces).to_a
+    available_peers = []
+    combined_piece_data = ''
+    loop do
+      available_peers = decode_peers(peers) if available_peers.empty?
+      peer = available_peers.slice!(0)
+      peer_ip, peer_port = peer.split(':')
+      piece_index = work_queue.slice!(0)
+      combined_piece_data += TCPConnection.handle_download(peer_ip, peer_port, sha1_hash, decoded_info, piece_index.to_i)
+
+      break if work_queue.empty?
+    rescue StandardError => _e
+      work_queue.unshift(piece_index)
+    end
+    File.open(output_file_path, 'wb') { |f| f.write(combined_piece_data) }
+  rescue StandardError => e
+    puts "Error downloading piece: #{e.message}"
   end
 
   private
