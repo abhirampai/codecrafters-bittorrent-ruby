@@ -61,6 +61,21 @@ class MagnetExtension
     [decoded_magnet_extension_hash, peer_id, decoded_payload, socket]
   end
 
+  def self.request_metadata(magnet_link, piece_index = 0) # rubocop:disable Metrics/AbcSize
+    decoded_magnet_extension_hash, _, decoded_payload, socket = MagnetExtension.handshake(magnet_link)
+    request_payload = Bencoding.encode({ 'msg_type' => 0, 'piece' => piece_index })
+    length = [2 + request_payload.bytesize].pack('N')
+    socket.write(length + [20].pack('C') + [decoded_payload['m']['ut_metadata']].pack('C') + request_payload)
+
+    message = TCPConnection.read_until(socket, 20)
+    payload = Bencoding.decode(message[:payload][1..])
+    decoded_info = payload[1]
+    socket.close
+
+    [CGI.unescape(decoded_magnet_extension_hash['tr']),
+     [decoded_magnet_extension_hash['xt'].gsub('urn:btih:', '')].pack('H*'), decoded_info]
+  end
+
   private
 
   def self.get_query_params(url)
