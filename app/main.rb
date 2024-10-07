@@ -38,8 +38,16 @@ when 'magnet_handshake'
 when 'magnet_info'
   BitTorrentClient.magnet_info(args[0])
 when 'magnet_download_piece'
+  if args.length < 4 || args[0] != '-o'
+    puts 'Usage: your_bittorrent.sh magnet_download_piece -o <output_file> <torrent_file> <piece_index>'
+    exit(1)
+  end
   BitTorrentClient.magnet_download_piece(args[1], args[2], args[3])
 when 'magnet_download'
+  if args.length < 3 || args[0] != '-o'
+    puts 'Usage: your_bittorrent.sh magnet_download -o <output_file> <torrent_file>'
+    exit(1)
+  end
   BitTorrentClient.magnet_download(args[1], args[2])
 else
   puts 'Invalid command'
