@@ -40,7 +40,7 @@ class MagnetExtension
 
     response = Net::HTTP.get(uri)
     peers = Bencoding.decode(response)['peers']
-    peer_ip, peer_port = BitTorrentClient.decode_peers(peers).first.split(':')
+    peer_ip, peer_port = BitTorrentClient.decode_peers(peers).last.split(':')
 
     socket = TCPConnection.handshake(peer_ip, peer_port, info_hash, extension: true)
 

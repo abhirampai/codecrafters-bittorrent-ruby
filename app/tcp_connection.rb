@@ -81,7 +81,7 @@ class TCPConnection
     id = socket.read(1).unpack1('C')
     payload = socket.read(length - 1)
 
-    { id: id, payload: payload }
+    { id:, payload: }
   end
 
   def self.send_message(socket, id, payload = '')

@@ -170,7 +170,26 @@ class BitTorrentClient
     puts "Info Hash: #{decoded_magnet_extension_hash['xt'].gsub('urn:btih:', '')}"
     puts "Piece Length: #{decoded_info['piece length']}"
     puts "Piece Hashes: #{decoded_info['pieces'].unpack1('H*')}"
+  end
 
+  def self.magnet_download_piece(output_file_path, magnet_link, piece_index)
+    decoded_magnet_extension_hash, _, decoded_payload, socket = MagnetExtension.handshake(magnet_link)
+    request_payload = Bencoding.encode({ 'msg_type' => 0, 'piece' => piece_index.to_i })
+    length = [2 + request_payload.bytesize].pack('N')
+    socket.write(length + [20].pack('C') + [decoded_payload['m']['ut_metadata']].pack('C') + request_payload)
+
+    message = TCPConnection.read_until(socket, 20)
+    payload = Bencoding.decode(message[:payload][1..])
+    decoded_info = payload[1]
+    socket.close
+
+    announce_url = CGI.unescape(decoded_magnet_extension_hash['tr'])
+    sha1_hash = [decoded_magnet_extension_hash['xt'].gsub('urn:btih:', '')].pack('H*')
+    peers = find_peers(announce_url, sha1_hash, decoded_info)
+    peer_ip, peer_port = decode_peers(peers).last.split(':')
+
+    puts "Dowloading piece #{piece_index.to_i}."
+    TCPConnection.handle_peer_message(peer_ip, peer_port, sha1_hash, decoded_info, piece_index.to_i, output_file_path)
   end
 
   private
@@ -185,5 +204,23 @@ class BitTorrentClient
       port = peer[4..5].unpack1('n')
       "#{ip}:#{port}"
     end
+  end
+
+  def self.find_peers(url, sha1_hash, decoded_info)
+    uri = URI(url)
+    uri.query = URI.encode_www_form(
+      info_hash: sha1_hash,
+      peer_id: SecureRandom.alphanumeric(20),
+      port: 6881,
+      uploaded: 0,
+      downloaded: 0,
+      left: decoded_info['length'],
+      compact: 1
+    )
+
+    response = Net::HTTP.get(uri)
+    Bencoding.decode(response)['peers']
+  rescue StandardError => e
+    puts "Error downloading piece: #{e.message}"
   end
 end
