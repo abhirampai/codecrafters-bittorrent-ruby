@@ -149,13 +149,7 @@ class BitTorrentClient
       end
     end
 
-    private
-
-    def decode_file(file_path)
-      File.open(file_path, 'rb') { |file| Bencoding.decode(file.read) }
-    end
-
-    def find_peers(url, sha1_hash, decoded_info) # rubocop:disable Metrics/MethodLength
+    def find_peers(url, sha1_hash, decoded_info = { 'length' => 999 }) # rubocop:disable Metrics/MethodLength
       uri = URI(url)
       uri.query = URI.encode_www_form(
         info_hash: sha1_hash,
@@ -171,6 +165,12 @@ class BitTorrentClient
       Bencoding.decode(response)['peers']
     rescue StandardError => e
       puts "Error finding peers: #{e.message}"
+    end
+
+    private
+
+    def decode_file(file_path)
+      File.open(file_path, 'rb') { |file| Bencoding.decode(file.read) }
     end
 
     def handle_download(total_pieces, peers, sha1_hash, decoded_info, output_file_path) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
